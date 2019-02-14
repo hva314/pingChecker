@@ -39,7 +39,7 @@ if args.number: NUMBER=args.number
 else: NUMBER='1'
 
 # convert subnet to list of ip
-def convert_range(ranges, ip_subnet):
+def convert_range(targets, ip_subnet):
 
     if '/' in ip_subnet:
         (ip, cidr) = ip_subnet.split('/')
@@ -49,7 +49,7 @@ def convert_range(ranges, ip_subnet):
         end = start | ((1 << bits) - 1)
         
         for i in range(start+1, end):
-            ranges.append(str(socket.inet_ntoa(struct.pack('>I',i))))
+            targets.append(str(socket.inet_ntoa(struct.pack('>I',i))))
         return 0
 
     elif '-' in ip_subnet:
@@ -57,15 +57,15 @@ def convert_range(ranges, ip_subnet):
         start = int(ip_subnet.split('-')[0].split('.')[-1])
         end = int(ip_subnet.split('-')[1])
         for i in range(start, end+1):
-            ranges.append(pre+str(i))
+            targets.append(pre+str(i))
         return 0
     return 1
 
 # import ip from file
-def import_ip(ranges, filename):
+def import_ip(targets, filename):
     with open(filename,'r') as f:
         for line in f:
-            ranges.append(line.lstrip().rstrip())
+            targets.append(line.lstrip().rstrip())
 
 def ping(index,ip,status):
     # this script use system 'ping' command
@@ -92,35 +92,34 @@ def ping(index,ip,status):
         stat = RED + "DOWN" + RES
     status[index] = stat
 
-ranges  = []    # list of ips
+targets  = []    # list of ips
 threads = []    # threading slot
 status  = []    # status for output
 
 # getting list of ips from argument
 if args.range:
     try:
-        if convert_range(ranges, args.range) != 0:
-            raise
+        if convert_range(targets, args.range) != 0: raise
     except:
         print RED, "[ERROR]", RES, "Invalid range:", args.range
         exit(1)
 
 # getting list of ip from file
 if args.ip_file:
-    import_ip(ranges,args.ip_file)
+    import_ip(targets,args.ip_file)
 
-if len(ranges) == 0:
+if len(targets) == 0:
     print "No HOST supplied."
     exit(1)
 
-for i in range(len(ranges)):
+for _ in range(len(targets)):
     threads.append(None)
     status.append(None)
 
 # start
 while True:
 
-    total   = len(ranges)
+    total   = len(targets)
     up      = total
 
     # set timer
@@ -131,24 +130,23 @@ while True:
         print GRN ,"[+]", RES, "Start scanning"
         print GRN ,"[+]", RES, start_time
 
-    for index in range(len(ranges)):
-        ip = ranges[index]
-        threads[index] = threading.Thread(target=ping, args=(index,ip,status,))
+    for index, host in enumerate(targets):
+        threads[index] = threading.Thread(target=ping, args=(index,host,status,))
         threads[index].start()
         #time.sleep(0.1)
 
-    # join all thread
-    for i in range(len(threads)):
-        threads[i].join()
+    # join all threads
+    for thread in threads:
+        thread.join()
 
     # print 
-    for i in range(len(ranges)):
+    for i in range(len(targets)):
         if "DOWN" in status[i]:
             up -= 1
             if args.verbose == False:
                 continue
 
-        print "  %-16s %s" % (ranges[i], status[i])
+        print "  %-16s %s" % (targets[i], status[i])
 
     # set timer and calculate time
     end_time = datetime.datetime.now() 
@@ -165,3 +163,5 @@ while True:
         time.sleep(float(args.interval))
     else:
         break
+
+print GRN ,"[+]", RES, "Done!"
